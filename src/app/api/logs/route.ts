@@ -21,7 +21,7 @@ type MezmoRawLine = {
 };
 
 const parseLevel = (raw: MezmoRawLine, parsed: Record<string, unknown>): string => {
-  if (raw.level) return raw.level;
+  if (typeof raw.level === 'string' && raw.level) return raw.level.toLowerCase();
   const l = parsed['level'] ?? parsed['severity'];
   if (typeof l === 'string') return l.toLowerCase();
   return 'info';

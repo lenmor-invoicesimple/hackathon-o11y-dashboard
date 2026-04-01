@@ -452,7 +452,7 @@ export default function DashboardPage() {
                           {new Date(log.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                         </span>
                         <span className={`shrink-0 w-10 ${LOG_LEVEL_COLORS[log.level] ?? 'text-gray-400'}`}>
-                          {log.level.slice(0, 4).toUpperCase()}
+                          {String(log.level ?? '').slice(0, 4).toUpperCase()}
                         </span>
                         <span className="text-gray-300 break-all">{log.message}</span>
                       </div>
