@@ -2,7 +2,7 @@
 
 Internal observability dashboard for Invoice Simple. Aggregates logs and metrics from Datadog and Mezmo (LogDNA).
 
-![alt text](image.png)
+![alt text](/images/image-1.png)
 
 ## Setup
 
