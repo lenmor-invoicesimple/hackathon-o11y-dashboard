@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useTraceFilters } from '../hooks/useTraceFilters';
 import { useTraces } from '../hooks/useTraces';
 import { useLogs } from '../hooks/useLogs';
@@ -39,8 +40,10 @@ export default function DashboardPage() {
     onPrev,
   } = useTraces({ filters, statusFilter, resourceFilters, allEnabled });
 
-  const { logs, logsLoading, logsError } = useLogs(selected);
-  const { issues: sentryIssues, loading: sentryLoading, error: sentryError } = useSentryIssues(selected);
+  const [sentryWindow, setSentryWindow] = useState(5);
+
+  const { logs, logsLoading, logsError, logWindow } = useLogs(selected);
+  const { issues: sentryIssues, loading: sentryLoading, error: sentryError } = useSentryIssues(selected, sentryWindow);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden font-mono text-sm">
@@ -112,9 +115,12 @@ export default function DashboardPage() {
           logs={logs}
           logsLoading={logsLoading}
           logsError={logsError}
+          logWindow={logWindow}
           sentryIssues={sentryIssues}
           sentryLoading={sentryLoading}
           sentryError={sentryError}
+          sentryWindow={sentryWindow}
+          setSentryWindow={setSentryWindow}
         />
       </div>
     </div>

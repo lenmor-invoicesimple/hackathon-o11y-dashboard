@@ -1,17 +1,44 @@
 import type { LogLine } from '../app/api/logs/route';
+import type { LogWindow } from '../hooks/useLogs';
 import { LOG_LEVEL_COLORS } from '../lib/format';
+
+const MEZMO_STAGING = 'https://app.mezmo.com/a958fd65c8/logs/view/30898eb929';
+const MEZMO_PROD = 'https://app.mezmo.com/a958fd65c8/logs/view/7f1922a2d7';
+
+const mezmoUrl = (window: LogWindow): string => {
+  const base = window.env === 'production' ? MEZMO_PROD : MEZMO_STAGING;
+  // Mezmo web UI expects epoch seconds
+  const params = new URLSearchParams({
+    from: String(Math.floor(window.from / 1000)),
+    to: String(Math.floor(window.to / 1000)),
+  });
+  return `${base}?${params}`;
+};
 
 type LogsSectionProps = {
   logs: LogLine[];
   loading: boolean;
   error: string | null;
+  logWindow: LogWindow | null;
 };
 
-export const LogsSection = ({ logs, loading, error }: LogsSectionProps) => (
+export const LogsSection = ({ logs, loading, error, logWindow }: LogsSectionProps) => (
   <div>
-    <div className="text-gray-500 text-xs uppercase tracking-wide mb-2">
-      Logs
-      <span className="ml-2 text-gray-700 normal-case">±30s window</span>
+    <div className="text-gray-500 text-xs uppercase tracking-wide mb-2 flex items-center justify-between">
+      <span>
+        Logs
+        <span className="ml-2 text-gray-700 normal-case">±30s window</span>
+      </span>
+      {logWindow && (
+        <a
+          href={mezmoUrl(logWindow)}
+          target="_blank"
+          rel="noreferrer"
+          className="text-purple-400 hover:text-purple-300 normal-case text-xs"
+        >
+          Open in Mezmo ↗
+        </a>
+      )}
     </div>
     {loading && <div className="text-gray-600 text-xs px-1">Loading logs…</div>}
     {error && <div className="text-red-400 text-xs px-1">{error}</div>}

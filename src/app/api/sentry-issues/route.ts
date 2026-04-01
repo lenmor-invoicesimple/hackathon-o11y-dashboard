@@ -41,11 +41,12 @@ export const GET = async (req: NextRequest) => {
 
   const pathHint = resourceToPathQuery(resource);
 
-  // Tighten to issues that were still active at the time of the trace.
-  // Use a 1-hour lookback buffer so we catch issues that fired slightly before the span.
+  // Tighten to issues active around the time of the trace.
+  // `from` = trace start epoch ms, `window` = half-window in minutes (default 5).
   const from = searchParams.get('from');
+  const windowMs = Math.min(Number(searchParams.get('window') ?? '5'), 180) * 60 * 1000;
   const lastSeenFilter = from
-    ? ` lastSeen:>${new Date(Number(from) - 60 * 60 * 1000).toISOString()}`
+    ? ` lastSeen:>${new Date(Number(from) - windowMs).toISOString()} lastSeen:<${new Date(Number(from) + windowMs).toISOString()}`
     : '';
 
   const params = new URLSearchParams({

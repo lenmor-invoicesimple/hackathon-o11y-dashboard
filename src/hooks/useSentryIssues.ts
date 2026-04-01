@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { SentryIssue } from '../app/api/sentry-issues/route';
 import type { Span } from '../app/api/traces/route';
 
-export const useSentryIssues = (selected: Span | null) => {
+export const useSentryIssues = (selected: Span | null, windowMinutes: number = 5) => {
   const [issues, setIssues] = useState<SentryIssue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +17,7 @@ export const useSentryIssues = (selected: Span | null) => {
           resource: selected.resource,
           env: selected.env,
           from: String(new Date(selected.startTime).getTime()),
+          window: String(windowMinutes),
         });
         const res = await fetch(`/api/sentry-issues?${params}`);
         const json = await res.json();
@@ -29,7 +30,7 @@ export const useSentryIssues = (selected: Span | null) => {
       }
     };
     fetch_();
-  }, [selected]);
+  }, [selected, windowMinutes]);
 
   return { issues, loading, error };
 };

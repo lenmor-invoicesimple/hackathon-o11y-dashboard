@@ -1,5 +1,6 @@
 import type { Span } from '../app/api/traces/route';
 import type { LogLine } from '../app/api/logs/route';
+import type { LogWindow } from '../hooks/useLogs';
 import type { SentryIssue } from '../app/api/sentry-issues/route';
 import { STATUS_COLORS, codeColor } from '../lib/format';
 import { Row } from './Row';
@@ -11,9 +12,12 @@ type TraceDetailPanelProps = {
   logs: LogLine[];
   logsLoading: boolean;
   logsError: string | null;
+  logWindow: LogWindow | null;
   sentryIssues: SentryIssue[];
   sentryLoading: boolean;
   sentryError: string | null;
+  sentryWindow: number;
+  setSentryWindow: (w: number) => void;
 };
 
 export const TraceDetailPanel = ({
@@ -21,9 +25,12 @@ export const TraceDetailPanel = ({
   logs,
   logsLoading,
   logsError,
+  logWindow,
   sentryIssues,
   sentryLoading,
   sentryError,
+  sentryWindow,
+  setSentryWindow,
 }: TraceDetailPanelProps) => (
   <div className="w-96 flex flex-col bg-gray-900 overflow-y-auto shrink-0">
     {selected ? (
@@ -78,8 +85,8 @@ export const TraceDetailPanel = ({
           Open full trace in Datadog ↗
         </a>
 
-        <LogsSection logs={logs} loading={logsLoading} error={logsError} />
-        <SentryIssuesSection issues={sentryIssues} loading={sentryLoading} error={sentryError} />
+        <LogsSection logs={logs} loading={logsLoading} error={logsError} logWindow={logWindow} />
+        <SentryIssuesSection issues={sentryIssues} loading={sentryLoading} error={sentryError} window={sentryWindow} onWindowChange={setSentryWindow} />
       </div>
     ) : (
       <div className="flex-1 flex items-center justify-center text-gray-700 text-xs">
