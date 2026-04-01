@@ -1,218 +1,41 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { Span } from './api/traces/route';
-import type { LogLine } from './api/logs/route';
+import { useTraceFilters, RESOURCE_CATEGORIES } from '../hooks/useTraceFilters';
+import { useTraces } from '../hooks/useTraces';
+import { useLogs } from '../hooks/useLogs';
+import { useSentryIssues } from '../hooks/useSentryIssues';
+import { LOG_LEVEL_COLORS, STATUS_COLORS, codeColor, fmt } from '../lib/format';
 
-const LOG_LEVEL_COLORS: Record<string, string> = {
-  error: 'text-red-400',
-  warn:  'text-yellow-400',
-  info:  'text-sky-400',
-  debug: 'text-gray-500',
-  trace: 'text-gray-600',
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  ok: 'text-emerald-400',
-  error: 'text-red-400',
-  warn: 'text-yellow-400',
-};
-
-const CODE_COLOR = (code: number | null) => {
-  if (!code) return 'text-gray-400';
-  if (code < 400) return 'text-emerald-400';
-  if (code < 500) return 'text-yellow-400';
-  return 'text-red-400';
-};
-
-const fmt = (iso: string) => {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-};
-
-type FilterState = {
-  service: string;
-  hours: string;
-};
-
-type ResourceCategory = 'checkout' | 'nextjs' | 'events' | 'sentry' | 'other';
-
-const RESOURCE_CATEGORIES: { id: ResourceCategory; label: string }[] = [
-  { id: 'checkout', label: 'Checkout' },
-  { id: 'nextjs',   label: 'Next.js' },
-  { id: 'events',   label: 'Events' },
-  { id: 'sentry',   label: 'Sentry' },
-  { id: 'other',    label: 'Other' },
-];
-
-const classifyResource = (resource: string): ResourceCategory => {
-  if (resource.includes('/checkout/')) return 'checkout';
-  if (resource.includes('/_next/') || resource.includes('/public/') || resource.includes('/_not_found')) return 'nextjs';
-  if (resource.includes('events.')) return 'events';
-  if (resource.includes('sentry.io')) return 'sentry';
-  return 'other';
-};
-
-// Category priority: checkout wins over others if any span in the group matches
-const CATEGORY_PRIORITY: ResourceCategory[] = ['checkout', 'nextjs', 'events', 'sentry', 'other'];
-
-const classifyGroup = (resources: string[]): ResourceCategory => {
-  const categories = new Set(resources.map(classifyResource));
-  return CATEGORY_PRIORITY.find((c) => categories.has(c)) ?? 'other';
-};
 
 export default function DashboardPage() {
-  const [filters, setFilters] = useState<FilterState>({
-    service: 'is-unifiedxp-production',
-    hours: '1',
-  });
-  const [spans, setSpans] = useState<Span[]>([]);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'ok' | 'error' | '4xx' | '5xx'>('all');
-  const [meta, setMeta] = useState<{ from: string; to: string; service: string; query: string } | null>(null);
-  const [selected, setSelected] = useState<Span | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [cursorStack, setCursorStack] = useState<string[]>([]);
-  const [resourceFilters, setResourceFilters] = useState<Set<ResourceCategory>>(new Set(['checkout']));
-  const [expandedTraces, setExpandedTraces] = useState<Set<string>>(new Set());
-  const [logs, setLogs] = useState<LogLine[]>([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [logsError, setLogsError] = useState<string | null>(null);
+  const {
+    filters, setFilters,
+    statusFilter, setStatusFilter,
+    resourceFilters,
+    allEnabled,
+    toggleCategory,
+    enableAllCategories,
+  } = useTraceFilters();
 
-  const toggleTrace = (traceId: string) =>
-    setExpandedTraces((prev) => {
-      const next = new Set(prev);
-      next.has(traceId) ? next.delete(traceId) : next.add(traceId);
-      return next;
-    });
+  const {
+    spans,
+    meta,
+    selected, setSelected,
+    loading,
+    error,
+    nextCursor,
+    cursorStack,
+    traceGroups,
+    visibleSpans,
+    expandedTraces,
+    toggleTrace,
+    onRefresh,
+    onNext,
+    onPrev,
+  } = useTraces({ filters, statusFilter, resourceFilters, allEnabled });
 
-  const toggleCategory = (id: ResourceCategory) => {
-    setResourceFilters((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const allCategories = RESOURCE_CATEGORIES.map((c) => c.id);
-  const allEnabled = allCategories.every((id) => resourceFilters.has(id));
-
-  const statusFilteredSpans = spans.filter((s) => {
-    const code = s.statusCode;
-    const st = s.status?.toLowerCase();
-    const isError = code !== null ? code >= 400 : st === 'error' || st === 'warn';
-    const isOk = code !== null ? code < 400 : st === 'ok';
-    if (statusFilter === 'all') return true;
-    if (statusFilter === 'ok') return isOk;
-    if (statusFilter === 'error') return isError;
-    if (statusFilter === '4xx') return code !== null ? code >= 400 && code < 500 : isError;
-    if (statusFilter === '5xx') return code !== null ? code >= 500 : false;
-    return true;
-  });
-
-  // Keep for footer count
-  const visibleSpans = statusFilteredSpans;
-
-  const traceGroups = useMemo(() => {
-    const map = new Map<string, Span[]>();
-    for (const s of statusFilteredSpans) {
-      const group = map.get(s.traceId) ?? [];
-      group.push(s);
-      map.set(s.traceId, group);
-    }
-    const groups = Array.from(map.values()).map((groupSpans) => {
-      const primary = groupSpans.reduce((a, b) => a.durationMs >= b.durationMs ? a : b);
-      const worstStatus = groupSpans.some(s => s.status === 'error') ? 'error'
-        : groupSpans.some(s => s.status === 'warn') ? 'warn' : 'ok';
-      const codes = groupSpans.map(s => s.statusCode).filter((c): c is number => c !== null);
-      const worstCode = codes.length ? Math.max(...codes) : null;
-      const startTime = groupSpans.reduce((a, b) => a.startTime < b.startTime ? a : b).startTime;
-      const category = classifyGroup(groupSpans.map(s => s.resource));
-      return { traceId: primary.traceId, primary, spans: groupSpans, worstStatus, worstCode, startTime, category };
-    });
-    // Apply resource filter at group level
-    return groups.filter((g) => allEnabled || resourceFilters.has(g.category));
-  }, [statusFilteredSpans, resourceFilters, allEnabled]);
-
-  const load = useCallback(async (f: FilterState, cursor?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ service: f.service, hours: f.hours });
-      if (cursor) params.set('cursor', cursor);
-      const res = await fetch(`/api/traces?${params}`);
-      const json = await res.json();
-      if (!res.ok) {
-        setError(json.error ?? 'Unknown error');
-        return;
-      }
-      setSpans(json.spans);
-      setMeta(json.meta);
-      setNextCursor(json.nextCursor ?? null);
-      setSelected(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Network error');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    setCursorStack([]);
-    setNextCursor(null);
-    load(filters);
-  }, [filters]);
-
-  useEffect(() => {
-    if (!selected) { setLogs([]); return; }
-    const fetchLogs = async () => {
-      setLogsLoading(true);
-      setLogsError(null);
-      try {
-        const start = new Date(selected.startTime).getTime();
-        const BUFFER_MS = 30_000;
-        const from = start - BUFFER_MS;
-        const to = start + Math.max(selected.durationMs, 1000) + BUFFER_MS;
-        const params = new URLSearchParams({
-          from: String(from),
-          to: String(to),
-          env: selected.env,
-          size: '100',
-        });
-        const res = await fetch(`/api/logs?${params}`);
-        const json = await res.json();
-        if (!res.ok) { setLogsError(json.error ?? 'Unknown error'); return; }
-        setLogs(json.logs);
-      } catch (e) {
-        setLogsError(e instanceof Error ? e.message : 'Network error');
-      } finally {
-        setLogsLoading(false);
-      }
-    };
-    fetchLogs();
-  }, [selected]);
-
-  const onRefresh = () => {
-    setCursorStack([]);
-    setNextCursor(null);
-    load(filters);
-  };
-
-  const onNext = () => {
-    if (!nextCursor) return;
-    setCursorStack((s) => [...s, nextCursor]);
-    load(filters, nextCursor);
-  };
-
-  const onPrev = () => {
-    const stack = [...cursorStack];
-    stack.pop();
-    const prevCursor = stack.at(-1);
-    setCursorStack(stack);
-    load(filters, prevCursor);
-  };
+  const { logs, logsLoading, logsError } = useLogs(selected);
+  const { issues: sentryIssues, loading: sentryLoading, error: sentryError } = useSentryIssues(selected);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden font-mono text-sm">
@@ -262,7 +85,7 @@ export default function DashboardPage() {
       <div className="flex items-center gap-2 px-4 py-1.5 bg-gray-950 border-b border-gray-800 shrink-0">
         <span className="text-gray-600 text-xs">Show:</span>
         <button
-          onClick={() => setResourceFilters(new Set(allCategories))}
+          onClick={enableAllCategories}
           className={`px-2 py-0.5 rounded text-xs border transition-colors ${allEnabled ? 'bg-gray-700 border-gray-500 text-gray-200' : 'bg-transparent border-gray-700 text-gray-500 hover:text-gray-400'}`}
         >
           all
@@ -328,7 +151,7 @@ export default function DashboardPage() {
                       )}
                     </span>
                     <span className="text-right text-gray-300">{g.primary.durationMs}</span>
-                    <span className={`text-right ${CODE_COLOR(g.worstCode)}`}>{g.worstCode ?? '—'}</span>
+                    <span className={`text-right ${codeColor(g.worstCode)}`}>{g.worstCode ?? '—'}</span>
                     <span className={`text-right text-xs ${env === 'staging' ? 'text-amber-400' : env === 'production' ? 'text-sky-400' : 'text-gray-500'}`}>
                       {env || '—'}
                     </span>
@@ -354,7 +177,7 @@ export default function DashboardPage() {
                           {s.resource}
                         </span>
                         <span className="text-right text-gray-500">{s.durationMs}</span>
-                        <span className={`text-right ${CODE_COLOR(s.statusCode)}`}>{s.statusCode ?? '—'}</span>
+                        <span className={`text-right ${codeColor(s.statusCode)}`}>{s.statusCode ?? '—'}</span>
                         <span className="text-right text-gray-600">—</span>
                         <span className="text-right text-gray-600">{fmt(s.startTime)}</span>
                       </button>
@@ -411,7 +234,7 @@ export default function DashboardPage() {
                     <Row
                       label="HTTP Code"
                       value={String(selected.statusCode)}
-                      valueClass={CODE_COLOR(selected.statusCode)}
+                      valueClass={codeColor(selected.statusCode)}
                     />
                   )}
                   <Row label="Started" value={selected.startTime ? new Date(selected.startTime).toLocaleString() : '—'} />
@@ -456,6 +279,42 @@ export default function DashboardPage() {
                         </span>
                         <span className="text-gray-300 break-all">{log.message}</span>
                       </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Sentry Issues */}
+              <div>
+                <div className="text-gray-500 text-xs uppercase tracking-wide mb-2">Sentry Issues</div>
+                {sentryLoading && <div className="text-gray-600 text-xs px-1">Loading…</div>}
+                {sentryError && <div className="text-red-400 text-xs px-1">{sentryError}</div>}
+                {!sentryLoading && !sentryError && sentryIssues.length === 0 && (
+                  <div className="text-gray-700 text-xs px-1">No issues found for this route.</div>
+                )}
+                {!sentryLoading && sentryIssues.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {sentryIssues.map((issue) => (
+                      <a
+                        key={issue.id}
+                        href={issue.permalink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex flex-col gap-0.5 px-2 py-1.5 rounded bg-gray-800 border border-gray-700 hover:border-red-900 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs shrink-0 ${issue.level === 'error' ? 'text-red-400' : 'text-yellow-400'}`}>
+                            ● {issue.level}
+                          </span>
+                          <span className="text-gray-500 text-xs">{issue.shortId}</span>
+                          <span className="ml-auto text-gray-600 text-xs">{issue.count}×</span>
+                        </div>
+                        <div className="text-gray-200 text-xs truncate">{issue.title}</div>
+                        <div className="text-gray-600 text-xs truncate">{issue.culprit}</div>
+                        <div className="text-gray-700 text-xs">
+                          last seen {new Date(issue.lastSeen).toLocaleString()}
+                        </div>
+                      </a>
                     ))}
                   </div>
                 )}
