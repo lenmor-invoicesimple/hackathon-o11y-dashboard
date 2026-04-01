@@ -6,6 +6,7 @@ const DD_SPANS_URL = 'https://api.datadoghq.com/api/v2/spans/events/search';
 
 export type Span = {
   spanId: string;
+  parentId: string | null;
   traceId: string;
   resource: string;
   method: string | null;
@@ -15,20 +16,25 @@ export type Span = {
   startTime: string;
   ddLink: string;
   env: string;
+  service: string;
+  url: string | null;
 };
 
 type DDSpanAttributes = {
   trace_id?: string;
+  parent_id?: string;
   resource_name?: string;
   status?: string;
   env?: string;
   start_timestamp?: string;
   end_timestamp?: string;
+  service?: string;
   custom?: {
     duration?: number;
     http?: {
       method?: string;
       status_code?: number | string;
+      url?: string;
     };
   };
 };
@@ -38,14 +44,22 @@ type DDSpan = {
   attributes: DDSpanAttributes;
 };
 
+const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+
 const toSpan = (raw: DDSpan, fallbackEnv: string): Span => {
   const a = raw.attributes;
   const durationNs = a.custom?.duration ?? 0;
   const traceId = a.trace_id ?? raw.id;
+  const rawResource = a.resource_name ?? '(unknown)';
+  // When DD only captured the HTTP method as resource_name, try to use the URL path instead
+  const resource = HTTP_METHODS.has(rawResource.trim())
+    ? (a.custom?.http?.url ? new URL(a.custom.http.url).pathname : rawResource)
+    : rawResource;
   return {
     spanId: raw.id,
+    parentId: a.parent_id ?? null,
     traceId,
-    resource: a.resource_name ?? '(unknown)',
+    resource,
     method: a.custom?.http?.method ?? null,
     statusCode: a.custom?.http?.status_code
       ? Number(a.custom.http.status_code)
@@ -55,6 +69,8 @@ const toSpan = (raw: DDSpan, fallbackEnv: string): Span => {
     startTime: a.start_timestamp ?? '',
     ddLink: `https://app.datadoghq.com/apm/trace/${traceId}`,
     env: a.env ?? fallbackEnv,
+    service: a.service ?? '',
+    url: a.custom?.http?.url ?? null,
   };
 };
 

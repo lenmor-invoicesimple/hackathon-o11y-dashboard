@@ -41,9 +41,16 @@ export const GET = async (req: NextRequest) => {
 
   const pathHint = resourceToPathQuery(resource);
 
+  // Tighten to issues that were still active at the time of the trace.
+  // Use a 1-hour lookback buffer so we catch issues that fired slightly before the span.
+  const from = searchParams.get('from');
+  const lastSeenFilter = from
+    ? ` lastSeen:>${new Date(Number(from) - 60 * 60 * 1000).toISOString()}`
+    : '';
+
   const params = new URLSearchParams({
     project: SENTRY_PROJECT_ID,
-    query: `is:unresolved ${pathHint}`,
+    query: `is:unresolved ${pathHint}${lastSeenFilter}`,
     environment: env,
     limit: String(limit),
     sortBy: 'date',

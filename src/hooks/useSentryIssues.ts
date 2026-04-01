@@ -16,6 +16,7 @@ export const useSentryIssues = (selected: Span | null) => {
         const params = new URLSearchParams({
           resource: selected.resource,
           env: selected.env,
+          from: String(new Date(selected.startTime).getTime()),
         });
         const res = await fetch(`/api/sentry-issues?${params}`);
         const json = await res.json();

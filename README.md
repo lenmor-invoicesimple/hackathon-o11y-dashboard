@@ -2,6 +2,8 @@
 
 Internal observability dashboard for Invoice Simple. Aggregates logs and metrics from Datadog and Mezmo (LogDNA).
 
+![alt text](image.png)
+
 ## Setup
 
 1. Install dependencies:
@@ -16,6 +18,7 @@ Internal observability dashboard for Invoice Simple. Aggregates logs and metrics
 
    - `DD_API_KEY` / `DD_APP_KEY` — from [Datadog API Keys](https://app.datadoghq.com/organization-settings/api-keys)
    - `MEZMO_SERVICE_KEY` — from Mezmo Settings → Organization → API Keys → Service Keys
+   - `SENTRY_AUTH_TOKEN` — from Sentry Settings → Account → API → Personal Tokens (requires `alerts:read`, `event:read`, `project:read` scopes)
 
 3. Start the dev server (runs on port 3007):
    ```bash
@@ -33,3 +36,4 @@ Internal observability dashboard for Invoice Simple. Aggregates logs and metrics
 
 - **Datadog** — metrics and APM via Datadog API
 - **Mezmo** — log export via `https://api.mezmo.com/v1/export`
+- **Sentry** — unresolved issues via Sentry REST API (`/api/0/organizations/invoice-simple/issues/`)

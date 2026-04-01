@@ -4,7 +4,7 @@ Guidance for Claude Code when working in this repository.
 
 ## Project
 
-Internal observability dashboard — Next.js 15 app that queries Datadog and Mezmo APIs and displays results in a browser UI. Runs on port 3007.
+Internal observability dashboard — Next.js 15 app that queries Datadog, Mezmo, and Sentry APIs and displays results in a browser UI. Runs on port 3007.
 
 ## Commands
 
@@ -19,6 +19,7 @@ npm run start  # start production server (port 3007)
 Credentials live in `.env.local` (gitignored). See `.env.local.example` for required keys:
 - `DD_API_KEY` / `DD_APP_KEY` — Datadog
 - `MEZMO_SERVICE_KEY` — Mezmo log export
+- `SENTRY_AUTH_TOKEN` — Sentry personal token (`alerts:read`, `event:read`, `project:read` scopes)
 
 API calls to external services should be made from **Route Handlers** (`src/app/api/`) so credentials are never exposed to the browser.
 
