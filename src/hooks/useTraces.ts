@@ -64,26 +64,12 @@ export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }
     load(filters);
   }, [filters]);
 
-  // Prefer HTTP status code for error/ok determination; fall back to DD span status
-  // when statusCode is absent (e.g. internal/background spans with no HTTP context).
-  const statusFilteredSpans = spans.filter((s) => {
-    const code = s.statusCode;
-    const st = s.status?.toLowerCase();
-    const isError = code !== null ? code >= 400 : st === 'error' || st === 'warn';
-    const isOk = code !== null ? code < 400 : st === 'ok';
-    if (statusFilter === 'all') return true;
-    if (statusFilter === 'ok') return isOk;
-    if (statusFilter === 'error') return isError;
-    if (statusFilter === '4xx') return code !== null ? code >= 400 && code < 500 : isError;
-    if (statusFilter === '5xx') return code !== null ? code >= 500 : false;
-    return true;
-  });
-
   // Groups flat spans by traceId, elects a primary span, and computes per-group
   // rollup fields (worstStatus, worstCode, startTime) for the traces table.
+  // Status filtering happens after grouping so worstCode reflects all child spans.
   const { traceGroups, categoryCounts } = useMemo(() => {
     const map = new Map<string, Span[]>();
-    for (const s of statusFilteredSpans) {
+    for (const s of spans) {
       const group = map.get(s.traceId) ?? [];
       group.push(s);
       map.set(s.traceId, group);
@@ -101,15 +87,29 @@ export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }
       const category = classifyResource(primary.resource);
       return { traceId: primary.traceId, primary, spans: groupSpans, worstStatus, worstCode, startTime, category };
     });
+    // Filter groups by status using worstCode/worstStatus so child HTTP status codes
+    // are correctly considered even when the root span has no HTTP context.
+    const statusFiltered = allGroups.filter((g) => {
+      const code = g.worstCode;
+      const st = g.worstStatus;
+      const isError = code !== null ? code >= 400 : st === 'error' || st === 'warn';
+      const isOk = code !== null ? code < 400 : st === 'ok';
+      if (statusFilter === 'all') return true;
+      if (statusFilter === 'ok') return isOk;
+      if (statusFilter === 'error') return isError;
+      if (statusFilter === '4xx') return code !== null ? code >= 400 && code < 500 : false;
+      if (statusFilter === '5xx') return code !== null ? code >= 500 : false;
+      return true;
+    });
     // Count groups per category to populate the filter bar badges.
     const counts = {} as Record<ResourceCategory, number>;
-    for (const g of allGroups) counts[g.category] = (counts[g.category] ?? 0) + 1;
+    for (const g of statusFiltered) counts[g.category] = (counts[g.category] ?? 0) + 1;
     return {
       // When allEnabled, skip the per-category filter so every group is shown.
-      traceGroups: allGroups.filter((g) => allEnabled || resourceFilters.has(g.category)),
+      traceGroups: statusFiltered.filter((g) => allEnabled || resourceFilters.has(g.category)),
       categoryCounts: counts,
     };
-  }, [statusFilteredSpans, resourceFilters, allEnabled]);
+  }, [spans, statusFilter, resourceFilters, allEnabled]);
 
   const toggleTrace = (traceId: string) =>
     setExpandedTraces((prev) => {
@@ -151,7 +151,7 @@ export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }
     cursorStack,
     traceGroups,
     categoryCounts,
-    visibleSpans: statusFilteredSpans,
+    visibleSpans: spans,
     expandedTraces,
     toggleTrace,
     onRefresh,
