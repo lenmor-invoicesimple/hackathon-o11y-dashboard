@@ -1,14 +1,6 @@
 # Challenges & Iterations
 
-## 1. Time Bar Text Contrast (A11y)
-
-**Problem:** Duration labels on the waterfall time bars used `text-gray-500`, which had poor contrast against the teal/blue bar color — hard to read.
-
-**Fix:** Changed to `text-white` in `WaterfallView.tsx`.
-
----
-
-## 2. Mezmo Time Window Dropdown — Added Then Reverted
+## 1. Mezmo Time Window Dropdown — Added Then Reverted
 
 **Attempted:** Added a configurable time window dropdown to the Mezmo logs section, mirroring the Sentry `±N minutes` dropdown.
 
@@ -18,7 +10,7 @@
 
 ---
 
-## 3. Too Few Traces Per Page
+## 2. Too Few Traces Per Page
 
 **Problem:** Only ~13 traces were showing before pagination, leaving most of the screen empty. The footer showed "13 traces (1000 spans)".
 
@@ -39,7 +31,7 @@ The `nextCursor` returned to the UI is from the last DD page fetched, so the Nex
 
 ---
 
-## 4. Redundant Sentry & Mezmo Re-fetches
+## 3. Redundant Sentry & Mezmo Re-fetches
 
 **Problem:** Every time a span was selected, both Sentry issues and Mezmo logs were re-fetched from scratch — even if the same span had been viewed moments before.
 
@@ -54,7 +46,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 5. Datadog — Wrong API Endpoint
+## 4. Datadog — Wrong API Endpoint
 
 **Problem:** `GET /api/v1/services` returned `{"errors": ["Not found"]}`.
 
@@ -64,7 +56,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 6. Datadog — Service Name Not What We Expected
+## 5. Datadog — Service Name Not What We Expected
 
 **Problem:** `service:is-unifiedxp` returned empty data.
 
@@ -74,7 +66,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 7. Datadog — Filter Syntax & Operation Name
+## 6. Datadog — Filter Syntax & Operation Name
 
 **Problem:** `service:is-unifiedxp-production@span.kind:server` returned empty results.
 
@@ -86,7 +78,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 8. Mezmo — Wrong Token Type
+## 7. Mezmo — Wrong Token Type
 
 **Problem:** An `sts_`-prefixed token gave `{"error":"Service Key Validation Error: Invalid or deactivated servicekey"}`.
 
@@ -96,7 +88,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 9. Mezmo — Wrong Auth Header Format
+## 8. Mezmo — Wrong Auth Header Format
 
 **Problem:** Sending the key as `servicekey: KEY` returned `NotAuthorized`.
 
@@ -106,7 +98,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 10. Mezmo — `log.level` Not Always a String
+## 9. Mezmo — `log.level` Not Always a String
 
 **Problem:** After wiring in Mezmo logs, a runtime TypeError occurred accessing `LOG_LEVEL_COLORS[log.level]`.
 
@@ -116,7 +108,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 11. Sentry — Project Slug vs Numeric ID
+## 10. Sentry — Project Slug vs Numeric ID
 
 **Problem:** `GET /api/0/projects/invoice-simple/is-unifiedxp/` returned `{name: null}`.
 
@@ -126,7 +118,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 12. Sentry — Token Scope Confusion
+## 11. Sentry — Token Scope Confusion
 
 **Problem:** Multiple "permission denied" errors iterating through token types.
 
@@ -139,7 +131,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 13. Datadog — Span Count Mismatch (56 vs 68)
+## 12. Datadog — Span Count Mismatch (56 vs 68)
 
 **Problem:** The dashboard showed 56 spans for a trace; Datadog showed 68.
 
@@ -149,7 +141,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 14. Span Labels Showing "POST POST"
+## 13. Span Labels Showing "POST POST"
 
 **Problem:** Some span rows displayed "POST POST" as the name.
 
@@ -159,17 +151,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 15. Service Dropdown Not Re-fetching
-
-**Problem:** Switching between production and staging in the dropdown did not reload traces.
-
-**Root cause:** The `useEffect` for fetching had an empty dependency array.
-
-**Fix:** Added service, time range, and limit as dependencies so any dropdown change triggers a re-fetch.
-
----
-
-## 16. Mezmo Deep-Link Time Range Params Not Honored
+## 14. Mezmo Deep-Link Time Range Params Not Honored
 
 **Problem:** The "Open in Mezmo ↗" link always opened at the latest logs, ignoring `from`/`to` URL params.
 
@@ -179,7 +161,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 17. Trace Row Showing `error` When Root Request Returned 200
+## 15. Trace Row Showing `error` When Root Request Returned 200
 
 **Problem:** A checkout trace row showed `error` status and a red code badge, but opening the full trace in Datadog showed the root request returned 200. The error was coming from a Sentry ingest child span (`/api/4509010820268032/envelope/ 429`).
 
@@ -196,7 +178,7 @@ Changing the Sentry time window dropdown busts the cache naturally (new `window`
 
 ---
 
-## 18. Category Misclassification — Wrong Spans Appearing in Sentry / Next.js Tabs
+## 16. Category Misclassification — Wrong Spans Appearing in Sentry / Next.js Tabs
 
 **Problem (a):** `/(authenticated)` page-load traces were appearing in the **Sentry** category tab instead of Next.js/Landing.
 
