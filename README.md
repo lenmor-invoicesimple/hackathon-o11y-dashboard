@@ -139,7 +139,7 @@ Datadog trace fetches are never cached — always live.
 
 ## Known Limitations
 
-- **Cross-service span gap** — `service:` filtering means spans from downstream services (`is-parse-server`, `is-api`, `flagsmith`) are excluded. Span counts here will be lower than what Datadog shows for the full trace (e.g. 56 vs 68). Fix requires a second fetch by `trace_id:XXXX` with no service filter — not yet implemented.
+- **Cross-service span gap** — Traces are fetched with a `service:` filter, so only spans originated by that service are returned. Downstream services (`is-parse-server`, `is-api`, `flagsmith`) that participate in the same trace are excluded. This means span counts here will be lower than what Datadog's full trace view shows (e.g. 56 vs 68 spans). A complete trace would require a second fetch using `trace_id:XXXX` with no `service:` filter — not yet implemented.
 - **Mezmo deep-link** — "Open in Mezmo ↗" cannot jump to a specific time window; Mezmo's web viewer ignores `from`/`to` URL params on saved view URLs.
 - **Sentry correlation is fuzzy** — matched by partial path prefix, not by trace/request ID.
 
@@ -181,7 +181,7 @@ Currently hardcoded for `is-unifiedxp` with categories tuned to its routes (Chec
 - `is-parse-server` might be: `functions / files / users / sessions / other`
 
 ### Cross-service span fetch *(high value)*
-When a trace is expanded, fetch **all spans for that trace** (not just the current service's) by querying Datadog with `trace_id:XXXX` and no service filter. Currently span counts are lower than what Datadog shows for the full trace because downstream spans (`is-parse-server`, `is-api`, `flagsmith`) are excluded. This would make the waterfall complete and surface errors in downstream services.
+Traces are currently fetched with a `service:` filter, so only spans originated by the selected service are returned. Spans from downstream services that participated in the same trace (`is-parse-server`, `is-api`, `flagsmith`) are excluded, making span counts lower than what Datadog's full trace view shows. When a trace is expanded, a second fetch using `trace_id:XXXX` with no `service:` filter would pull in all spans for that trace — making the waterfall complete and surfacing errors in downstream services.
 
 ### Span-level log + error correlation *(medium value)*
 Currently Mezmo and Sentry are correlated against the **selected primary span** only. Expanding a span in the waterfall could fetch logs/errors scoped to that individual child span's time window, letting you drill into exactly which internal call triggered an error.
