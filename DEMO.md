@@ -9,9 +9,13 @@ Hi everyone, i'm here to demo the o11y dashboard i created for one of our servic
 Open Datadog, Mezmo, and Sentry side-by-side in three tabs.
 
 **Say:**
-> "So when something breaks in production, I have to jump between three tabs: Datadog to find the trace, Mezmo to find the logs, Sentry to find the error. The problem is that we use Datadog for tracing, but not for log ingestion — that's a higher-tier add-on and we already have Mezmo. These 3 platforms don't talk to each other — in  Mezmo you have to manually set the time range in Mezmo's UI each time, and filter the logs. And Sentry has no concept of a trace ID, so you're searching by endpoint and eyeballing timestamps to find the related issue. This dashboard does all of that correlation automatically."
+> "So when something breaks in production, I have to jump between three tabs: Datadog to find the trace, Mezmo to find the logs, Sentry to find the error. The problem is that we use Datadog for tracing, but not for log ingestion — that's a higher-tier add-on and we already have Mezmo. Also, these 3 platforms don't talk to each other — in  Mezmo you have to manually set the time range in Mezmo's UI each time, and filter the logs. And Sentry has no concept of a trace ID, so you're searching by endpoint and eyeballing timestamps to find the related issue. 
 
-Switch to the dashboard.
+So it's a lot of going back and forth, and that's not fun esp if you got paged at 2am.
+
+So the dashboard I created aggregates these 3 services automatically."
+
+<Switch to the dashboard.>
 
 ---
 
@@ -20,7 +24,15 @@ Switch to the dashboard.
 Load `http://localhost:3007` with `is-unifiedxp-production` + last **1 hour** selected.
 
 **Say:**
-> "This is a live feed of traces from our checkout service. Each row is a full request — grouped by trace ID — with its real outcome. When you select a span, it takes the start time and duration from Datadog and fires a time-windowed query to Mezmo — scoped to exactly that window. For Sentry it uses the span's URL path to scope the search, and looks for issues seen within a few minutes of the span. One click, three sources, all correlated."
+> "This is a live feed of Datadog traces from our checkout service. 
+Each row is a trace (or a full request).
+When you select a trace, you can see the spans inside that trace (which are the individual downstream requests). 
+Here we can see the logs from Mezmo for that timeframe, and also the Sentry issues for that URL path and that timeframe.
+
+Behind the scenes, 
+It takes the start time and duration from Datadog and fires a time-windowed query to Mezmo — scoped to exactly that window. 
+For Sentry it uses the span's URL path to scope the search, and looks for issues seen within a few minutes of the span. 
+One click, three sources, all correlated.
 
 Point out:
 - The **status + code columns** (`ok · 200`)
