@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useTraceFilters } from '../hooks/useTraceFilters';
 import { useTraces } from '../hooks/useTraces';
 import { useLogs } from '../hooks/useLogs';
@@ -32,6 +32,7 @@ export default function DashboardPage() {
     nextCursor,
     cursorStack,
     traceGroups,
+    categoryCounts,
     visibleSpans,
     expandedTraces,
     toggleTrace,
@@ -41,6 +42,29 @@ export default function DashboardPage() {
   } = useTraces({ filters, statusFilter, resourceFilters, allEnabled });
 
   const [sentryWindow, setSentryWindow] = useState(5);
+  // Width in px of the right-side detail panel; draggable between 260 and 800px.
+  const [detailWidth, setDetailWidth] = useState(384);
+  const dragging = useRef(false);
+
+  // Attaches temporary mousemove/mouseup listeners on the window so the drag
+  // continues even when the cursor leaves the handle element.
+  // Width is derived from distance to the right viewport edge: innerWidth - clientX.
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragging.current = true;
+    const onMove = (mv: MouseEvent) => {
+      if (!dragging.current) return;
+      const next = window.innerWidth - mv.clientX;
+      setDetailWidth(Math.min(Math.max(next, 260), 800));
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, []);
 
   const { logs, logsLoading, logsError, logWindow } = useLogs(selected);
   const { issues: sentryIssues, loading: sentryLoading, error: sentryError } = useSentryIssues(selected, sentryWindow);
@@ -61,6 +85,7 @@ export default function DashboardPage() {
         enableAllCategories={enableAllCategories}
         resourceFilters={resourceFilters}
         toggleCategory={toggleCategory}
+        categoryCounts={categoryCounts}
       />
 
       {/* Error bar */}
@@ -73,7 +98,7 @@ export default function DashboardPage() {
       {/* Body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Traces list */}
-        <div className="flex flex-col flex-1 overflow-hidden border-r border-gray-800">
+        <div className="flex flex-col flex-1 overflow-hidden">
           <TracesTableHeader />
 
           {/* Rows */}
@@ -110,7 +135,14 @@ export default function DashboardPage() {
           )}
         </div>
 
+        {/* Drag handle */}
+        <div
+          className="w-1 cursor-col-resize bg-gray-800 hover:bg-blue-600 active:bg-blue-500 transition-colors shrink-0"
+          onMouseDown={onDragStart}
+        />
+
         <TraceDetailPanel
+          width={detailWidth}
           selected={selected}
           logs={logs}
           logsLoading={logsLoading}

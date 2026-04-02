@@ -5,6 +5,10 @@ import { codeColor, STATUS_COLORS } from '../lib/format';
 
 type WaterfallNode = { span: Span; depth: number };
 
+// Converts a flat list of spans into a depth-annotated list for indented rendering.
+// Uses a depth-first walk so parent spans always appear before their children.
+// Spans whose parentId is outside the current group are treated as roots (depth 0).
+// Orphaned spans (unreachable from any root) are appended at depth 1 as a fallback.
 const buildTree = (spans: Span[]): WaterfallNode[] => {
   // Find root spans (no parent, or parent not in set)
   const spanIds = new Set(spans.map(s => s.spanId));
@@ -52,7 +56,8 @@ type Props = {
 export const WaterfallView = ({ spans, selectedSpanId, onSelectSpan }: Props) => {
   if (!spans.length) return null;
 
-  // Compute time bounds
+  // Compute the overall time bounds across all spans to normalise bar positions.
+  // totalMs is clamped to 1 to prevent division-by-zero for zero-duration traces.
   const startMs = spans.reduce(
     (min, s) => Math.min(min, new Date(s.startTime).getTime()),
     Infinity
@@ -78,6 +83,8 @@ export const WaterfallView = ({ spans, selectedSpanId, onSelectSpan }: Props) =>
 
       {nodes.map(({ span: s, depth }) => {
         const isSelected = s.spanId === selectedSpanId;
+        // Position bar as a percentage of the total trace window.
+        // widthPct is floored at 0.5% so even sub-millisecond spans are visible.
         const offsetPct = ((new Date(s.startTime).getTime() - startMs) / totalMs) * 100;
         const widthPct = Math.max((s.durationMs / totalMs) * 100, 0.5);
         const barColor = s.status === 'error'
@@ -92,7 +99,7 @@ export const WaterfallView = ({ spans, selectedSpanId, onSelectSpan }: Props) =>
             onClick={() => onSelectSpan(isSelected ? null : s)}
             className={[
               'w-full grid grid-cols-[1fr_200px] gap-2 px-3 py-0.5 border-b border-gray-900/50 text-left text-[11px] transition-colors hover:bg-gray-800',
-              isSelected ? 'bg-gray-800' : '',
+              isSelected ? 'bg-gray-800' : 'bg-gray-800/40',
             ].join(' ')}
           >
             {/* Left: label */}
@@ -127,7 +134,7 @@ export const WaterfallView = ({ spans, selectedSpanId, onSelectSpan }: Props) =>
                 }}
               />
               <span
-                className="absolute text-[9px] text-gray-500 whitespace-nowrap"
+                className="absolute text-[9px] text-white whitespace-nowrap"
                 style={{ left: `${Math.min(offsetPct + widthPct + 0.5, 75)}%` }}
               >
                 {s.durationMs}ms

@@ -16,6 +16,10 @@ type TracesPaginationProps = {
   onNext: () => void;
 };
 
+// Footer bar showing query metadata and Prev/Next pagination controls.
+// Prev is disabled on the first page (cursorStack is empty); Next is disabled when
+// there are no more Datadog pages (nextCursor is null).
+// visibleSpanCount may be less than totalSpanCount when a status filter is active.
 export const TracesPagination = ({
   meta,
   traceCount,

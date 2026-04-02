@@ -20,6 +20,8 @@ type MezmoRawLine = {
   message?: string;
 };
 
+// Resolves log level from raw Mezmo fields. Mezmo can surface the level on the
+// top-level `level` field or inside a JSON-encoded `_line` payload (as `level` or `severity`).
 const parseLevel = (raw: MezmoRawLine, parsed: Record<string, unknown>): string => {
   if (typeof raw.level === 'string' && raw.level) return raw.level.toLowerCase();
   const l = parsed['level'] ?? parsed['severity'];
@@ -27,6 +29,8 @@ const parseLevel = (raw: MezmoRawLine, parsed: Record<string, unknown>): string 
   return 'info';
 };
 
+// Resolves the human-readable message text with the same fallback chain:
+// raw.message → parsed JSON message/msg field → raw line text.
 const parseMessage = (raw: MezmoRawLine, parsed: Record<string, unknown>): string => {
   if (raw.message) return raw.message;
   const m = parsed['message'] ?? parsed['msg'];
@@ -34,6 +38,9 @@ const parseMessage = (raw: MezmoRawLine, parsed: Record<string, unknown>): strin
   return raw._line ?? '';
 };
 
+// Converts a raw Mezmo export line to a normalised LogLine.
+// Mezmo's export API returns newline-delimited JSON; `_line` may itself be a JSON string
+// (structured logging) or plain text — try to parse it and fall back gracefully.
 const toLogLine = (raw: MezmoRawLine): LogLine => {
   let parsed: Record<string, unknown> = {};
   try {
@@ -88,6 +95,8 @@ export const GET = async (req: NextRequest) => {
     );
   }
 
+  // Mezmo export returns newline-delimited JSON (one object per line).
+  // Invalid/empty lines are silently dropped; results are sorted oldest-first.
   const text = await res.text();
   const logs: LogLine[] = text
     .split('\n')

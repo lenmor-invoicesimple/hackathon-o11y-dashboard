@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Span } from '../app/api/traces/route';
 import type { FilterState, ResourceCategory } from './useTraceFilters';
-import { classifyGroup } from '../lib/classify';
+import { classifyResource } from '../lib/classify';
 
 type TraceMeta = { from: string; to: string; service: string; query: string };
 
@@ -22,6 +22,8 @@ type UseTracesParams = {
   allEnabled: boolean;
 };
 
+// Fetches and manages Datadog trace spans for the dashboard.
+// Handles cursor-based pagination: cursorStack tracks visited pages so "Prev" can navigate back.
 export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }: UseTracesParams) => {
   const [spans, setSpans] = useState<Span[]>([]);
   const [meta, setMeta] = useState<TraceMeta | null>(null);
@@ -29,6 +31,7 @@ export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
+  // Stack of cursors for visited pages — push on Next, pop on Prev
   const [cursorStack, setCursorStack] = useState<string[]>([]);
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(new Set());
 
@@ -61,6 +64,8 @@ export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }
     load(filters);
   }, [filters]);
 
+  // Prefer HTTP status code for error/ok determination; fall back to DD span status
+  // when statusCode is absent (e.g. internal/background spans with no HTTP context).
   const statusFilteredSpans = spans.filter((s) => {
     const code = s.statusCode;
     const st = s.status?.toLowerCase();
@@ -74,24 +79,36 @@ export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }
     return true;
   });
 
-  const traceGroups = useMemo(() => {
+  // Groups flat spans by traceId, elects a primary span, and computes per-group
+  // rollup fields (worstStatus, worstCode, startTime) for the traces table.
+  const { traceGroups, categoryCounts } = useMemo(() => {
     const map = new Map<string, Span[]>();
     for (const s of statusFilteredSpans) {
       const group = map.get(s.traceId) ?? [];
       group.push(s);
       map.set(s.traceId, group);
     }
-    const groups = Array.from(map.values()).map((groupSpans): TraceGroup => {
-      const primary = groupSpans.reduce((a, b) => a.durationMs >= b.durationMs ? a : b);
+    const allGroups = Array.from(map.values()).map((groupSpans): TraceGroup => {
+      // Prefer the root span (no parent); fall back to the longest span as the representative row.
+      const root = groupSpans.find(s => s.parentId === null);
+      const primary = root ?? groupSpans.reduce((a, b) => a.durationMs >= b.durationMs ? a : b);
+      // Bubble up the worst span status so the row can show a secondary badge.
       const worstStatus = groupSpans.some(s => s.status === 'error') ? 'error'
         : groupSpans.some(s => s.status === 'warn') ? 'warn' : 'ok';
       const codes = groupSpans.map(s => s.statusCode).filter((c): c is number => c !== null);
       const worstCode = codes.length ? Math.max(...codes) : null;
       const startTime = groupSpans.reduce((a, b) => a.startTime < b.startTime ? a : b).startTime;
-      const category = classifyGroup(groupSpans.map(s => s.resource));
+      const category = classifyResource(primary.resource);
       return { traceId: primary.traceId, primary, spans: groupSpans, worstStatus, worstCode, startTime, category };
     });
-    return groups.filter((g) => allEnabled || resourceFilters.has(g.category));
+    // Count groups per category to populate the filter bar badges.
+    const counts = {} as Record<ResourceCategory, number>;
+    for (const g of allGroups) counts[g.category] = (counts[g.category] ?? 0) + 1;
+    return {
+      // When allEnabled, skip the per-category filter so every group is shown.
+      traceGroups: allGroups.filter((g) => allEnabled || resourceFilters.has(g.category)),
+      categoryCounts: counts,
+    };
   }, [statusFilteredSpans, resourceFilters, allEnabled]);
 
   const toggleTrace = (traceId: string) =>
@@ -109,11 +126,13 @@ export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }
 
   const onNext = () => {
     if (!nextCursor) return;
+    // Push current page's cursor before advancing so onPrev can return to it.
     setCursorStack((s) => [...s, nextCursor]);
     load(filters, nextCursor);
   };
 
   const onPrev = () => {
+    // Pop the last cursor; load from the one before it (undefined = first page).
     const stack = [...cursorStack];
     stack.pop();
     const prevCursor = stack.at(-1);
@@ -131,6 +150,7 @@ export const useTraces = ({ filters, statusFilter, resourceFilters, allEnabled }
     nextCursor,
     cursorStack,
     traceGroups,
+    categoryCounts,
     visibleSpans: statusFilteredSpans,
     expandedTraces,
     toggleTrace,

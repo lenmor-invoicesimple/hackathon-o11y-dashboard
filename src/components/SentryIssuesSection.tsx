@@ -1,12 +1,6 @@
 import type { SentryIssue } from '../app/api/sentry-issues/route';
 
-const WINDOW_OPTIONS = [
-  { label: '±5m', value: 5 },
-  { label: '±15m', value: 15 },
-  { label: '±30m', value: 30 },
-  { label: '±1h', value: 60 },
-  { label: '±3h', value: 180 },
-];
+const WINDOW_OPTIONS = [1, 2, 5, 10, 15, 30];
 
 type SentryIssuesSectionProps = {
   issues: SentryIssue[];
@@ -26,7 +20,7 @@ export const SentryIssuesSection = ({ issues, loading, error, window, onWindowCh
         className="text-xs bg-gray-800 border border-gray-700 text-gray-400 rounded px-1 py-0.5 cursor-pointer"
       >
         {WINDOW_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
+          <option key={o} value={o}>±{o}m</option>
         ))}
       </select>
     </div>

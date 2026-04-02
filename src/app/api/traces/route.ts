@@ -46,6 +46,8 @@ type DDSpan = {
 
 const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
 
+// Normalises a raw Datadog span into the flat Span type used by the UI.
+// Datadog duration is stored in nanoseconds; convert to milliseconds for display.
 const toSpan = (raw: DDSpan, fallbackEnv: string): Span => {
   const a = raw.attributes;
   const durationNs = a.custom?.duration ?? 0;
@@ -99,50 +101,67 @@ export const GET = async (req: NextRequest) => {
   const resolvedQuery = debugQuery ?? `service:${service}${envFilter}`;
   const cursor = searchParams.get('cursor') ?? undefined;
 
-  const body = {
+  const env = envSuffix === 'staging' || envSuffix === 'production' ? envSuffix : '';
+  const headers = {
+    'Content-Type': 'application/json',
+    'DD-API-KEY': DD_API_KEY,
+    'DD-APPLICATION-KEY': DD_APP_KEY,
+  };
+
+  // Constructs the Datadog Spans Search API v2 request body.
+  // pageCursor is a Datadog opaque cursor string used for pagination (meta.page.after).
+  const buildBody = (pageCursor?: string) => ({
     data: {
       attributes: {
-        filter: {
-          query: resolvedQuery,
-          from,
-          to,
-        },
+        filter: { query: resolvedQuery, from, to },
         sort: '-timestamp',
-        page: cursor ? { limit, cursor } : { limit },
+        page: pageCursor ? { limit, cursor: pageCursor } : { limit },
       },
       type: 'search_request',
     },
-  };
-
-  const res = await fetch(DD_SPANS_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'DD-API-KEY': DD_API_KEY,
-      'DD-APPLICATION-KEY': DD_APP_KEY,
-    },
-    body: JSON.stringify(body),
-    cache: 'no-store',
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    return NextResponse.json(
-      { error: `Datadog error: ${res.status}`, detail: text },
-      { status: 502 }
-    );
+  // Auto-paginate up to MAX_PAGES Datadog pages so we return enough traces per UI page.
+  // Datadog's per-page limit is 1000 spans; busy services can exhaust that quickly.
+  // The user-supplied cursor (if any) is only injected on the first iteration; subsequent
+  // iterations follow Datadog's own next-page cursor (lastCursor).
+  const MAX_PAGES = 3;
+  const allSpans: Span[] = [];
+  let pageCursor: string | undefined = cursor;
+  let lastCursor: string | null = null;
+  let firstPage = true;
+
+  for (let i = 0; i < MAX_PAGES; i++) {
+    // Only use the user-supplied cursor on the first iteration
+    const res: Response = await fetch(DD_SPANS_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(buildBody(firstPage ? pageCursor : (lastCursor ?? undefined))),
+      cache: 'no-store',
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      return NextResponse.json(
+        { error: `Datadog error: ${res.status}`, detail: text },
+        { status: 502 }
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const json: any = await res.json();
+
+    if (searchParams.get('debug') === '1') {
+      return NextResponse.json({ raw: json.data?.[0] ?? null, query: resolvedQuery, total: json.data?.length ?? 0 });
+    }
+
+    const pageSpans: Span[] = (json.data ?? []).map((raw: DDSpan) => toSpan(raw, env));
+    allSpans.push(...pageSpans);
+    lastCursor = json.meta?.page?.after ?? null;
+    firstPage = false;
+
+    if (!lastCursor || pageSpans.length < limit) break;
   }
 
-  const json = await res.json();
-
-  if (searchParams.get('debug') === '1') {
-    return NextResponse.json({ raw: json.data?.[0] ?? null, query: resolvedQuery, total: json.data?.length ?? 0 });
-  }
-
-  const env = envSuffix === 'staging' || envSuffix === 'production' ? envSuffix : '';
-  const spans: Span[] = (json.data ?? []).map((raw: DDSpan) => toSpan(raw, env));
-  const nextCursor: string | null = json.meta?.page?.after ?? null;
-
-  const query = resolvedQuery;
-  return NextResponse.json({ spans, meta: { from, to, service, query }, nextCursor });
+  return NextResponse.json({ spans: allSpans, meta: { from, to, service, query: resolvedQuery }, nextCursor: lastCursor });
 };

@@ -19,12 +19,14 @@ export type SentryIssue = {
   permalink: string;
 };
 
-// Extract the path segments from a DD resource_name like "GET /checkout/[documentId]/success"
-// and match against Sentry culprit like "/checkout/:documentId"
+// Converts a Datadog resource_name to a path prefix suitable for a Sentry issue search.
+// Sentry culprit strings use short path prefixes, not full parameterised paths, so
+// we strip the method and keep only the first segment.
+// Example: "GET /checkout/[documentId]/success" → "/checkout"
 const resourceToPathQuery = (resource: string): string => {
   // Strip HTTP method prefix if present
   const path = resource.replace(/^(GET|POST|PUT|DELETE|PATCH)\s+/, '');
-  // Take the first two path segments as a search hint (e.g. /checkout)
+  // Take the first path segment only — Sentry culprits rarely go deeper
   const segments = path.split('/').filter(Boolean);
   return segments[0] ? `/${segments[0]}` : path;
 };
@@ -41,8 +43,11 @@ export const GET = async (req: NextRequest) => {
 
   const pathHint = resourceToPathQuery(resource);
 
-  // Tighten to issues active around the time of the trace.
-  // `from` = trace start epoch ms, `window` = half-window in minutes (default 5).
+  // Narrow results to issues last seen within ±window minutes of the trace start time.
+  // Without this filter Sentry would return all unresolved issues for the route, many of
+  // which may be unrelated to the specific request being inspected.
+  // Example with from=1700000000000 and window=5 →
+  //   lastSeen:>2023-11-14T22:08:20Z lastSeen:<2023-11-14T22:18:20Z
   const from = searchParams.get('from');
   const windowMs = Math.min(Number(searchParams.get('window') ?? '5'), 180) * 60 * 1000;
   const lastSeenFilter = from

@@ -8,6 +8,7 @@ import { LogsSection } from './LogsSection';
 import { SentryIssuesSection } from './SentryIssuesSection';
 
 type TraceDetailPanelProps = {
+  width: number;
   selected: Span | null;
   logs: LogLine[];
   logsLoading: boolean;
@@ -21,6 +22,7 @@ type TraceDetailPanelProps = {
 };
 
 export const TraceDetailPanel = ({
+  width,
   selected,
   logs,
   logsLoading,
@@ -32,13 +34,14 @@ export const TraceDetailPanel = ({
   sentryWindow,
   setSentryWindow,
 }: TraceDetailPanelProps) => (
-  <div className="w-96 flex flex-col bg-gray-900 overflow-y-auto shrink-0">
+  <div className="flex flex-col bg-gray-900 overflow-y-auto shrink-0" style={{ width }}>
     {selected ? (
       <div className="p-4 flex flex-col gap-4">
         <div>
           <div className="text-gray-500 text-xs uppercase tracking-wide mb-2">Trace Detail</div>
           <div className="flex flex-col gap-1.5">
             <Row label="Resource" value={selected.resource} />
+            {/* Show URL as pathname+search for readability; fall back to full URL if parsing fails. */}
             {selected.url && (() => {
               let display = selected.url;
               try { display = new URL(selected.url).pathname + new URL(selected.url).search; } catch {}
@@ -90,7 +93,7 @@ export const TraceDetailPanel = ({
       </div>
     ) : (
       <div className="flex-1 flex items-center justify-center text-gray-700 text-xs">
-        Select a trace to see details
+        Expand a trace and select a span to see details
       </div>
     )}
   </div>
